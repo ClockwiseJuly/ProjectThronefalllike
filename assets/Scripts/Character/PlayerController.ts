@@ -3,7 +3,7 @@ import { BaseCharacter, CharacterDirection, CharacterFaction, CharacterState } f
 import { logger, LogCategory } from '../Core/Logger';
 import { EventBus, EventType } from '../Core/EventBus';
 import { GameManager } from '../Core/GameManager';
-import { GameState } from '../Core/GameState';
+import { GameState, GameStateType } from '../Core/GameState';
 
 /**
  * 玩家输入模式枚举
@@ -77,7 +77,9 @@ export class PlayerController extends BaseCharacter {
         this.faction = CharacterFaction.PLAYER;
         
         // 获取主摄像机
-        this._mainCamera = GameManager.getInstance().getMainCamera();
+        // 使用Cocos Creator标准方法获取主摄像机
+        //this._mainCamera = director.getScene().getComponentInChildren(Camera);
+        this._mainCamera = this.node.scene.getComponentInChildren(Camera);
         
         // 创建移动目标标记
         this._createMoveTargetMarker();
@@ -139,7 +141,7 @@ export class PlayerController extends BaseCharacter {
         super._registerEvents();
         
         // 监听游戏状态变化事件
-        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
     }
     
     /**
@@ -149,7 +151,7 @@ export class PlayerController extends BaseCharacter {
         super._unregisterEvents();
         
         // 注销游戏状态变化事件
-        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
     }
     
     /**
@@ -230,7 +232,7 @@ export class PlayerController extends BaseCharacter {
         // 创建移动标记节点
         this._moveTargetMarker = new Node('MoveTargetMarker');
         // 添加到场景
-        GameManager.getInstance().getUIRoot().addChild(this._moveTargetMarker);
+        GameManager.getInstance().uiRoot.addChild(this._moveTargetMarker);
         // 默认隐藏
         this._moveTargetMarker.active = false;
         
@@ -244,7 +246,7 @@ export class PlayerController extends BaseCharacter {
         // 创建虚拟摇杆节点
         this._virtualJoystick = new Node('VirtualJoystick');
         // 添加到UI层
-        GameManager.getInstance().getUIRoot().addChild(this._virtualJoystick);
+        GameManager.getInstance().uiRoot.addChild(this._virtualJoystick);
         // 默认隐藏
         this._virtualJoystick.active = false;
         
@@ -565,8 +567,9 @@ export class PlayerController extends BaseCharacter {
         const enemies: BaseCharacter[] = [];
         
         // 获取当前场景中的所有BaseCharacter组件
-        const characters = GameManager.getInstance().getCurrentScene().getComponentsInChildren(BaseCharacter);
-        
+        //const characters = GameManager.getInstance().getCurrentScene().getComponentsInChildren(BaseCharacter);
+        const characters = this.node.scene.getComponentsInChildren(BaseCharacter);
+
         // 筛选出敌人阵营的角色
         for (const character of characters) {
             if (character.faction === CharacterFaction.ENEMY && character !== this) {
@@ -645,20 +648,20 @@ export class PlayerController extends BaseCharacter {
         
         // 根据游戏状态调整玩家控制
         switch (newState) {
-            case GameState.PLAYING:
+            case GameStateType.PLAYING:
                 // 游戏进行中，启用控制
                 this._canMove = true;
                 this._canAttack = true;
                 break;
                 
-            case GameState.PAUSED:
+            case GameStateType.PAUSED:
                 // 游戏暂停，禁用控制
                 this._canMove = false;
                 this._canAttack = false;
                 this.stopMoving();
                 break;
                 
-            case GameState.GAME_OVER:
+            case GameStateType.GAME_OVER:
                 // 游戏结束，禁用控制
                 this._canMove = false;
                 this._canAttack = false;
@@ -719,7 +722,7 @@ export class PlayerController extends BaseCharacter {
         super._performAttack(target);
         
         // 触发玩家攻击事件
-        EventBus.getInstance().emit(EventType.PLAYER_ATTACK, {
+        EventBus.getInstance().emit(EventType.PLAYER_ATTACKED, {
             player: this,
             target: target
         });

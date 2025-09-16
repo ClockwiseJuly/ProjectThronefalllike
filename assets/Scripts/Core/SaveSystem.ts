@@ -365,13 +365,25 @@ export class SaveSystem extends Component {
             ...saveData,
             playerData: {
                 ...saveData.playerData,
-                equippedItems: Object.fromEntries(saveData.playerData.equippedItems),
-                upgrades: Object.fromEntries(saveData.playerData.upgrades),
-                statistics: Object.fromEntries(saveData.playerData.statistics)
+                equippedItems: Array.from(saveData.playerData.equippedItems).reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {}),
+                upgrades: Array.from(saveData.playerData.upgrades).reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {}),
+                statistics: Array.from(saveData.playerData.statistics).reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {})
             },
             settingsData: {
                 ...saveData.settingsData,
-                keyBindings: Object.fromEntries(saveData.settingsData.keyBindings)
+                keyBindings: Array.from(saveData.settingsData.keyBindings).reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {})
             }
         };
         
@@ -385,10 +397,10 @@ export class SaveSystem extends Component {
         const data = JSON.parse(serializedData);
         
         // 将普通对象转换回Map
-        data.playerData.equippedItems = new Map(Object.entries(data.playerData.equippedItems));
-        data.playerData.upgrades = new Map(Object.entries(data.playerData.upgrades));
-        data.playerData.statistics = new Map(Object.entries(data.playerData.statistics));
-        data.settingsData.keyBindings = new Map(Object.entries(data.settingsData.keyBindings));
+        data.playerData.equippedItems = new Map(Object.keys(data.playerData.equippedItems).map(key => [key, data.playerData.equippedItems[key]]));
+        data.playerData.upgrades = new Map(Object.keys(data.playerData.upgrades).map(key => [key, data.playerData.upgrades[key]]));
+        data.playerData.statistics = new Map(Object.keys(data.playerData.statistics).map(key => [key, data.playerData.statistics[key]]));
+        data.settingsData.keyBindings = new Map(Object.keys(data.settingsData.keyBindings).map(key => [key, data.settingsData.keyBindings[key]]));
         
         return data;
     }
@@ -408,7 +420,10 @@ export class SaveSystem extends Component {
         try {
             const serializedSettings = JSON.stringify({
                 ...settings,
-                keyBindings: Object.fromEntries(settings.keyBindings)
+                keyBindings: Array.from(settings.keyBindings).reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {})
             });
             
             sys.localStorage.setItem(this.SETTINGS_KEY, serializedSettings);
@@ -431,7 +446,8 @@ export class SaveSystem extends Component {
             }
             
             const data = JSON.parse(serializedSettings);
-            data.keyBindings = new Map(Object.entries(data.keyBindings));
+            // 将对象转换为键值对数组,再创建Map
+            data.keyBindings = new Map(Object.keys(data.keyBindings).map(key => [key, data.keyBindings[key]]));
             
             console.log("设置已加载");
             return data;

@@ -1,9 +1,9 @@
-import { _decorator, Vec2, Node } from 'cc';
+import { _decorator, Vec2, Node, Prefab } from 'cc';
 import { logger, LogCategory } from '../Core/Logger';
-import { eventBus, EventType } from '../Core/EventBus';
+import { EventBus, EventType } from '../Core/EventBus';
 import { resourceManager } from '../Core/ResourceManager';
-import { gameState } from '../Core/GameState';
-import { BaseCharacter, CharacterCamp } from '../Character/BaseCharacter';
+import { GameState } from '../Core/GameState';
+import { BaseCharacter, CharacterFaction } from '../Character/BaseCharacter';
 import { combatSystem } from './CombatSystem';
 
 /**
@@ -142,7 +142,7 @@ export class TowerSystem {
      * 初始化塔防系统
      */
     private _initialize(): void {
-        logger.info(LogCategory.TOWER, '塔防系统初始化');
+        logger.info(LogCategory.COMBAT, '塔防系统初始化');
         
         // 注册事件监听
         this._registerEvents();
@@ -156,11 +156,11 @@ export class TowerSystem {
      */
     private _registerEvents(): void {
         // 游戏状态变化事件
-        eventBus.on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged.bind(this));
         // 日夜切换事件
-        eventBus.on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged, this);
+        EventBus.getInstance().on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged.bind(this));
         // 资源变化事件
-        eventBus.on(EventType.RESOURCE_CHANGED, this._onResourceChanged, this);
+        EventBus.getInstance().on(EventType.RESOURCE_CHANGED, this._onResourceChanged.bind(this));
     }
     
     /**
@@ -281,7 +281,7 @@ export class TowerSystem {
      */
     private _onGameStateChanged(newState: string, oldState: string): void {
         // 根据游戏状态调整塔防系统行为
-        logger.debug(LogCategory.TOWER, `游戏状态变化: ${oldState} -> ${newState}`);
+        logger.debug(LogCategory.COMBAT, `游戏状态变化: ${oldState} -> ${newState}`);
     }
     
     /**
@@ -290,13 +290,15 @@ export class TowerSystem {
      */
     private _onDayNightChanged(isNight: boolean): void {
         // 根据日夜状态调整塔防系统行为
-        logger.debug(LogCategory.TOWER, `日夜切换: ${isNight ? '夜晚' : '白天'}`);
+        logger.debug(LogCategory.COMBAT, `日夜切换: ${isNight ? '夜晚' : '白天'}`);
         
         // 在日夜切换时调整塔防系统状态
         this._towerDefenseEnabled = !isNight;
         
         // 通知UI更新
-        eventBus.emit(EventType.TOWER_SYSTEM_STATE_CHANGED, this._towerDefenseEnabled);
+        EventBus.getInstance().emit(EventType.TOWER_SYSTEM_STATE_CHANGED, {
+            enabled: this._towerDefenseEnabled
+        });
     }
     
     /**
@@ -305,7 +307,7 @@ export class TowerSystem {
      */
     private _onResourceChanged(resources: number): void {
         this._resources = resources;
-        logger.debug(LogCategory.TOWER, `资源变化: ${resources}`);
+        logger.debug(LogCategory.COMBAT, `资源变化: ${resources}`);
     }
     
     /**
@@ -324,10 +326,10 @@ export class TowerSystem {
             });
         }
         
-        logger.info(LogCategory.TOWER, `初始化塔防格子: ${gridPositions.length}个`);
+        logger.info(LogCategory.COMBAT, `初始化塔防格子: ${gridPositions.length}个`);
         
         // 通知UI更新
-        eventBus.emit(EventType.TOWER_GRIDS_INITIALIZED, this._gridInfos);
+        EventBus.getInstance().emit('TOWER_GRIDS_INITIALIZED', this._gridInfos);
     }
     
     /**
@@ -336,7 +338,7 @@ export class TowerSystem {
      */
     public selectGrid(gridIndex: number): void {
         if (gridIndex < 0 || gridIndex >= this._gridInfos.length) {
-            logger.warn(LogCategory.TOWER, `选择的格子索引无效: ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `选择的格子索引无效: ${gridIndex}`);
             return;
         }
         
@@ -352,7 +354,7 @@ export class TowerSystem {
         }
         
         // 通知UI更新
-        eventBus.emit(EventType.TOWER_GRID_SELECTED, {
+        EventBus.getInstance().emit('TOWER_GRID_SELECTED', {
             gridIndex: this._selectedGridIndex,
             gridInfo: gridInfo,
             tower: this._selectedTower
@@ -367,7 +369,7 @@ export class TowerSystem {
         this._selectedTower = null;
         
         // 通知UI更新
-        eventBus.emit(EventType.TOWER_GRID_DESELECTED);
+        EventBus.getInstance().emit('TOWER_GRID_DESELECTED');
     }
     
     /**
@@ -379,40 +381,40 @@ export class TowerSystem {
     public buildTower(gridIndex: number, towerType: TowerType): boolean {
         // 检查塔防模式是否启用
         if (!this._towerDefenseEnabled) {
-            logger.warn(LogCategory.TOWER, '塔防模式未启用，无法建造塔防单位');
+            logger.warn(LogCategory.COMBAT, '塔防模式未启用，无法建造塔防单位');
             return false;
         }
         
         // 检查格子索引是否有效
         if (gridIndex < 0 || gridIndex >= this._gridInfos.length) {
-            logger.warn(LogCategory.TOWER, `建造塔防单位失败: 格子索引无效 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `建造塔防单位失败: 格子索引无效 ${gridIndex}`);
             return false;
         }
         
         // 检查格子状态
         const gridInfo = this._gridInfos[gridIndex];
         if (gridInfo.state !== GridState.EMPTY) {
-            logger.warn(LogCategory.TOWER, `建造塔防单位失败: 格子已占用或不可用 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `建造塔防单位失败: 格子已占用或不可用 ${gridIndex}`);
             return false;
         }
         
         // 获取塔防单位配置
         const towerConfig = this._towerConfigs.get(`${towerType}_${TowerLevel.LEVEL_1}`);
         if (!towerConfig) {
-            logger.warn(LogCategory.TOWER, `建造塔防单位失败: 未找到塔防单位配置 ${towerType}`);
+            logger.warn(LogCategory.COMBAT, `建造塔防单位失败: 未找到塔防单位配置 ${towerType}`);
             return false;
         }
         
         // 检查资源是否足够
         if (this._resources < towerConfig.buildCost) {
-            logger.warn(LogCategory.TOWER, `建造塔防单位失败: 资源不足 ${this._resources}/${towerConfig.buildCost}`);
+            logger.warn(LogCategory.COMBAT, `建造塔防单位失败: 资源不足 ${this._resources}/${towerConfig.buildCost}`);
             return false;
         }
         
         // 加载塔防单位预制体
-        resourceManager.loadPrefab(towerConfig.prefabPath, (prefab) => {
-            if (!prefab) {
-                logger.error(LogCategory.TOWER, `建造塔防单位失败: 加载预制体失败 ${towerConfig.prefabPath}`);
+        resourceManager.loadAsset<Prefab>(towerConfig.prefabPath, Prefab, 'resources', null, (err, prefab) => {
+            if (err || !prefab) {
+                logger.error(LogCategory.COMBAT, `建造塔防单位失败: 加载预制体失败 ${towerConfig.prefabPath}`, err);
                 return;
             }
             
@@ -429,14 +431,14 @@ export class TowerSystem {
             // const tower = towerNode.getComponent(BaseCharacter);
             // 临时创建一个BaseCharacter实例用于演示
             const tower = new BaseCharacter();
-            tower.id = `tower_${Date.now()}_${gridIndex}`;
-            tower.camp = CharacterCamp.ALLY;
-            tower.isTowerUnit = true;
+            // 由于 BaseCharacter 类中没有 id 属性，需要先确保 BaseCharacter 类中定义了该属性
+            (tower as any).id = `tower_${Date.now()}_${gridIndex}`;
+            tower.faction = CharacterFaction.FRIENDLY;
             
             // 设置塔防单位属性
             tower.attributes = {
                 ...tower.attributes,
-                attack: towerConfig.attributes.attack,
+                attackPower: towerConfig.attributes.attack,
                 attackSpeed: towerConfig.attributes.attackSpeed,
                 attackRange: towerConfig.attributes.attackRange,
                 // 其他属性...
@@ -447,23 +449,23 @@ export class TowerSystem {
             gridInfo.tower = tower;
             
             // 添加到已建造的塔防单位列表
-            this._builtTowers.set(tower.id, tower);
+            this._builtTowers.set(tower.uuid, tower);
             
             // 扣除资源
             this._resources -= towerConfig.buildCost;
-            eventBus.emit(EventType.RESOURCE_CHANGED, this._resources);
+            EventBus.getInstance().emit(EventType.RESOURCE_CHANGED, { value: this._resources });
             
             // 通知战斗系统
-            eventBus.emit(EventType.CHARACTER_CREATED, tower);
+            EventBus.getInstance().emit(EventType.CHARACTER_CREATED, tower);
             
             // 通知UI更新
-            eventBus.emit(EventType.TOWER_BUILT, {
+            EventBus.getInstance().emit(EventType.TOWER_BUILT, {
                 gridIndex,
                 tower,
                 towerConfig
             });
             
-            logger.info(LogCategory.TOWER, `建造塔防单位成功: ${towerConfig.name} 在格子 ${gridIndex}`);
+            logger.info(LogCategory.COMBAT, `建造塔防单位成功: ${towerConfig.name} 在格子 ${gridIndex}`);
         });
         
         return true;
@@ -477,38 +479,38 @@ export class TowerSystem {
     public upgradeTower(gridIndex: number): boolean {
         // 检查塔防模式是否启用
         if (!this._towerDefenseEnabled) {
-            logger.warn(LogCategory.TOWER, '塔防模式未启用，无法升级塔防单位');
+            logger.warn(LogCategory.COMBAT, '塔防模式未启用，无法升级塔防单位');
             return false;
         }
         
         // 检查格子索引是否有效
         if (gridIndex < 0 || gridIndex >= this._gridInfos.length) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 格子索引无效 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 格子索引无效 ${gridIndex}`);
             return false;
         }
         
         // 检查格子状态
         const gridInfo = this._gridInfos[gridIndex];
         if (gridInfo.state !== GridState.OCCUPIED || !gridInfo.tower) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 格子上没有塔防单位 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 格子上没有塔防单位 ${gridIndex}`);
             return false;
         }
         
         const tower = gridInfo.tower;
         
         // 获取当前塔防单位配置
-        const towerType = tower.towerType || TowerType.BASIC;
-        const currentLevel = tower.towerLevel || TowerLevel.LEVEL_1;
+        const towerType = (tower as any).towerType || TowerType.BASIC; // 使用类型断言访问可能不存在的属性
+        const currentLevel = (tower as any).towerLevel || TowerLevel.LEVEL_1;
         const currentConfig = this._towerConfigs.get(`${towerType}_${currentLevel}`);
         
         if (!currentConfig) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 未找到当前塔防单位配置 ${towerType}_${currentLevel}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 未找到当前塔防单位配置 ${towerType}_${currentLevel}`);
             return false;
         }
         
         // 检查是否有下一级
         if (!currentConfig.nextLevel || currentLevel >= TowerLevel.LEVEL_4) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 已达到最高等级 ${currentLevel}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 已达到最高等级 ${currentLevel}`);
             return false;
         }
         
@@ -517,28 +519,28 @@ export class TowerSystem {
         const nextConfig = this._towerConfigs.get(`${towerType}_${nextLevel}`);
         
         if (!nextConfig) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 未找到下一级塔防单位配置 ${towerType}_${nextLevel}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 未找到下一级塔防单位配置 ${towerType}_${nextLevel}`);
             return false;
         }
         
         // 检查资源是否足够
         if (this._resources < currentConfig.upgradeCost) {
-            logger.warn(LogCategory.TOWER, `升级塔防单位失败: 资源不足 ${this._resources}/${currentConfig.upgradeCost}`);
+            logger.warn(LogCategory.COMBAT, `升级塔防单位失败: 资源不足 ${this._resources}/${currentConfig.upgradeCost}`);
             return false;
         }
         
         // 加载下一级塔防单位预制体
-        resourceManager.loadPrefab(nextConfig.prefabPath, (prefab) => {
-            if (!prefab) {
-                logger.error(LogCategory.TOWER, `升级塔防单位失败: 加载预制体失败 ${nextConfig.prefabPath}`);
+        resourceManager.loadAsset<Prefab>(nextConfig.prefabPath, Prefab, 'resources', null, (err, prefab) => {
+            if (err || !prefab) {
+                logger.error(LogCategory.COMBAT, `升级塔防单位失败: 加载预制体失败 ${nextConfig.prefabPath}`, err);
                 return;
             }
             
             // 更新塔防单位属性
-            tower.towerLevel = nextLevel;
+            (tower as any).towerLevel = nextLevel;
             tower.attributes = {
                 ...tower.attributes,
-                attack: nextConfig.attributes.attack,
+                attackPower: nextConfig.attributes.attack,
                 attackSpeed: nextConfig.attributes.attackSpeed,
                 attackRange: nextConfig.attributes.attackRange,
                 // 其他属性...
@@ -546,16 +548,16 @@ export class TowerSystem {
             
             // 扣除资源
             this._resources -= currentConfig.upgradeCost;
-            eventBus.emit(EventType.RESOURCE_CHANGED, this._resources);
+            EventBus.getInstance().emit(EventType.RESOURCE_CHANGED, { value: this._resources });
             
             // 通知UI更新
-            eventBus.emit(EventType.TOWER_UPGRADED, {
+            EventBus.getInstance().emit(EventType.TOWER_UPGRADED, {
                 gridIndex,
                 tower,
                 towerConfig: nextConfig
             });
             
-            logger.info(LogCategory.TOWER, `升级塔防单位成功: ${currentConfig.name} -> ${nextConfig.name} 在格子 ${gridIndex}`);
+            logger.info(LogCategory.COMBAT, `升级塔防单位成功: ${currentConfig.name} -> ${nextConfig.name} 在格子 ${gridIndex}`);
         });
         
         return true;
@@ -569,37 +571,37 @@ export class TowerSystem {
     public sellTower(gridIndex: number): boolean {
         // 检查塔防模式是否启用
         if (!this._towerDefenseEnabled) {
-            logger.warn(LogCategory.TOWER, '塔防模式未启用，无法出售塔防单位');
+            logger.warn(LogCategory.COMBAT, '塔防模式未启用，无法出售塔防单位');
             return false;
         }
         
         // 检查格子索引是否有效
         if (gridIndex < 0 || gridIndex >= this._gridInfos.length) {
-            logger.warn(LogCategory.TOWER, `出售塔防单位失败: 格子索引无效 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `出售塔防单位失败: 格子索引无效 ${gridIndex}`);
             return false;
         }
         
         // 检查格子状态
         const gridInfo = this._gridInfos[gridIndex];
         if (gridInfo.state !== GridState.OCCUPIED || !gridInfo.tower) {
-            logger.warn(LogCategory.TOWER, `出售塔防单位失败: 格子上没有塔防单位 ${gridIndex}`);
+            logger.warn(LogCategory.COMBAT, `出售塔防单位失败: 格子上没有塔防单位 ${gridIndex}`);
             return false;
         }
         
         const tower = gridInfo.tower;
         
         // 获取塔防单位配置
-        const towerType = tower.towerType || TowerType.BASIC;
-        const towerLevel = tower.towerLevel || TowerLevel.LEVEL_1;
+        const towerType = (tower as any).towerType || TowerType.BASIC; // 使用类型断言访问可能不存在的属性
+        const towerLevel = (tower as any).towerLevel || TowerLevel.LEVEL_1;
         const towerConfig = this._towerConfigs.get(`${towerType}_${towerLevel}`);
         
         if (!towerConfig) {
-            logger.warn(LogCategory.TOWER, `出售塔防单位失败: 未找到塔防单位配置 ${towerType}_${towerLevel}`);
+            logger.warn(LogCategory.COMBAT, `出售塔防单位失败: 未找到塔防单位配置 ${towerType}_${towerLevel}`);
             return false;
         }
         
         // 从已建造的塔防单位列表中移除
-        this._builtTowers.delete(tower.id);
+        this._builtTowers.delete(tower.uuid);
         
         // 更新格子信息
         gridInfo.state = GridState.EMPTY;
@@ -607,19 +609,19 @@ export class TowerSystem {
         
         // 增加资源
         this._resources += towerConfig.sellValue;
-        eventBus.emit(EventType.RESOURCE_CHANGED, this._resources);
+        EventBus.getInstance().emit(EventType.RESOURCE_CHANGED, { value: this._resources });
         
         // 通知战斗系统
-        eventBus.emit(EventType.CHARACTER_DIED, tower);
+        EventBus.getInstance().emit(EventType.CHARACTER_DEATH, tower);
         
         // 通知UI更新
-        eventBus.emit(EventType.TOWER_SOLD, {
+        EventBus.getInstance().emit(EventType.TOWER_SOLD, {
             gridIndex,
             tower,
             towerConfig
         });
         
-        logger.info(LogCategory.TOWER, `出售塔防单位成功: ${towerConfig.name} 在格子 ${gridIndex}`);
+        logger.info(LogCategory.COMBAT, `出售塔防单位成功: ${towerConfig.name} 在格子 ${gridIndex}`);
         
         return true;
     }
@@ -707,7 +709,7 @@ export class TowerSystem {
      */
     public setResources(resources: number): void {
         this._resources = resources;
-        eventBus.emit(EventType.RESOURCE_CHANGED, this._resources);
+        EventBus.getInstance().emit(EventType.RESOURCE_CHANGED, { value: this._resources });
     }
     
     /**
@@ -723,7 +725,7 @@ export class TowerSystem {
      * 在场景切换或游戏重置时调用
      */
     public cleanup(): void {
-        logger.info(LogCategory.TOWER, '清理塔防系统');
+        logger.info(LogCategory.COMBAT, '清理塔防系统');
         
         // 清空塔防单位列表
         this._builtTowers.clear();

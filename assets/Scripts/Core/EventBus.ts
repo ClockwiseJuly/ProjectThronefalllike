@@ -12,20 +12,37 @@ export enum EventType {
     GAME_RESUME = 'game_resume',
     GAME_OVER = 'game_over',
     GAME_VICTORY = 'game_victory',
+
+    GAME_STATE_CHANGED = 'game_state_changed',
+
+    LEVEL_COMPLETED = 'level_completed',
+
+    SCENE_LOADED = 'scene_loaded',
+    SCENE_LOADING = 'scene_loading',
+    SCENE_LOADING_PROGRESS = 'scene_loading_progress',
+    SCENE_LOAD_FAILED = 'scene_load_failed',
+    EVENT_AFTER_SCENE_LAUNCH = 'event_after_scene_launch',  
+
     
     // 日夜循环相关事件
     DAY_START = 'day_start',
     NIGHT_START = 'night_start',
     DAY_NIGHT_TRANSITION = 'day_night_transition',
+    DAY_NIGHT_CHANGED = 'day_night_changed',
     
     // 塔防模式相关事件
     TOWER_PLACED = 'tower_placed',
     TOWER_UPGRADED = 'tower_upgraded',
     TOWER_SOLD = 'tower_sold',
+    TOWER_SYSTEM_STATE_CHANGED = 'tower_system_state_changed',
     WAVE_START = 'wave_start',
     WAVE_COMPLETE = 'wave_complete',
     ENEMY_SPAWNED = 'enemy_spawned',
     ENEMY_REACHED_END = 'enemy_reached_end',
+    TOWER_GRIDS_INITIALIZED = 'tower_grids_initialized',
+    TOWER_GRID_SELECTED = 'tower_grid_selected',
+    TOWER_GRID_DESELECTED = 'tower_grid_deselected',
+    TOWER_BUILT = 'tower_built',
     
     // 肉鸽模式相关事件
     DUNGEON_GENERATED = 'dungeon_generated',
@@ -33,20 +50,68 @@ export enum EventType {
     ROOM_CLEARED = 'room_cleared',
     ITEM_PICKED = 'item_picked',
     ABILITY_UNLOCKED = 'ability_unlocked',
-    
+    ROGUELIKE_SYSTEM_STATE_CHANGED = 'roguelike_system_state_changed',
+    ROGUELIKE_RUN_STARTED = 'roguelike_run_started',
+    ROGUELIKE_RUN_ENDED = 'roguelike_run_ended',
+
     // 角色相关事件
+    PLAYER_ATTACKED = 'player_attacked',
+    PLAYER_HURT = 'player_hurt',
     PLAYER_DAMAGED = 'player_damaged',
     PLAYER_HEALED = 'player_healed',
     PLAYER_DIED = 'player_died',
     PLAYER_LEVEL_UP = 'player_level_up',
+    PLAYER_DEATH = 'player_death',
+    PLAYER_REVIVE = 'player_revive',
+    PLAYER_USE_SKILL = 'player_use_skill',
+    PLAYER_ATTRIBUTE_CHANGED = 'player_attribute_changed',
+    PLAYER_EXPERIENCE_CHANGED = 'player_experience_changed',
+
     ENEMY_DAMAGED = 'enemy_damaged',
     ENEMY_DIED = 'enemy_died',
+    ENEMY_AI_STATE_CHANGED = 'enemy_ai_state_changed',
+    ENEMY_RANGED_ATTACK = 'enemy_ranged_attack',
+    ENEMY_HURT = 'enemy_hurt',
+    ENEMY_DEATH = 'enemy_death',
+    ENEMY_DROP_LOOT = 'enemy_drop_loot',
+
+    CHARACTER_CREATED = 'character_created',
+    CHARACTER_ATTACK = 'character_attack',     // 添加角色攻击事件
+    CHARACTER_HURT = 'character_hurt',         // 添加角色受伤事件
+    CHARACTER_DODGE = 'character_dodge',       // 添加角色闪避事件
+    CHARACTER_DEATH = 'character_death',       // 添加角色死亡事件
+    CHARACTER_HEAL = 'character_heal',         // 添加角色治疗事件
+    CHARACTER_CRITICAL_HIT = 'character_critical_hit', // 添加角色暴击事件
+    CHARACTER_REVIVE = 'character_revive', // 添加角色复活事件
+    CHARACTER_STATUS_EFFECT_ADDED = 'character_status_effect_added', // 添加角色状态效果事件
+    CHARACTER_STATUS_EFFECT_REMOVED = 'character_status_effect_removed', // 添加角色状态效果移除事件
+    CHARACTER_SKILL_COOLDOWN_COMPLETE = 'character_skill_cooldown_complete', // 添加角色技能冷却完成事件
+    CHARACTER_INVINCIBLE_END = 'character_invincible_end', // 添加角色无敌结束事件
+    CHARACTER_MOVE_COMPLETE = 'character_move_complete', // 添加角色移动完成事件
+    CHARACTER_STATE_CHANGED = 'character_state_changed', // 添加角色状态改变事件
+    CHARACTER_ATTRIBUTE_CHANGED = 'character_attribute_changed', // 添加角色属性改变事件
+
+    WEAPON_UNLOCKED = 'weapon_unlocked',
+    WEAPON_EQUIPPED = 'weapon_equipped',
+    WEAPON_UPGRADED = 'weapon_upgraded',
+
+    SKILL_UNLOCKED = 'skill_unlocked',
+    SKILL_EQUIPPED = 'skill_equipped',
+    SKILL_UPGRADED = 'skill_upgraded',
+    SKILL_COOLDOWN_STARTED = 'skill_cooldown_started',
     
     // 资源相关事件
     RESOURCE_CHANGED = 'resource_changed',
     GOLD_CHANGED = 'gold_changed',
     EXPERIENCE_CHANGED = 'experience_changed',
-    
+    PERMANENT_UPGRADE_PURCHASED = 'permanent_upgrade_purchased',
+    SOUL_SHARDS_CHANGED = 'soul_shards_changed',
+    UPGRADE_POINTS_CHANGED = 'upgrade_points_changed',
+    SHOW_UPGRADE_OPTIONS = 'show_upgrade_options',
+    PERMANENT_UPGRADE_POINTS_CHANGED = 'permanent_upgrade_points_changed',
+    PERMANENT_UPGRADE_UNLOCKED = 'permanent_upgrade_unlocked',
+    PERMANENT_UPGRADE_LEVEL_INCREASED = 'permanent_upgrade_level_increased',
+
     // UI相关事件
     UI_SHOW = 'ui_show',
     UI_HIDE = 'ui_hide',
@@ -56,6 +121,24 @@ export enum EventType {
     SAVE_GAME = 'save_game',
     LOAD_GAME = 'load_game',
     SETTINGS_CHANGED = 'settings_changed',
+    GAME_MODE_CHANGED = 'game_mode_changed',
+    GAME_PROGRESS_CHANGED = 'game_progress_changed',
+    GAME_STATE_LOADED = 'game_state_loaded',
+    BEFORE_SAVE = 'before_save',
+    AFTER_SAVE = 'after_save',
+    SAVE_FAILED = 'save_failed',
+    LOAD_FAILED = 'load_failed',
+    BEFORE_LOAD = 'before_load',
+    AFTER_LOAD = 'after_load',
+    SAVE_DELETED = 'save_deleted',
+    GET_GAME_STATE_DATA = 'get_game_state_data',
+    GET_PLAYER_DATA = 'get_player_data',
+    GET_SCENE_DATA = 'get_scene_data',
+    GET_GAME_PROGRESS_DATA = 'get_game_progress_data',
+    GET_GAME_MODE = 'get_game_mode',
+    ALL_SAVES_CLEARED = 'all_saves_cleared',
+    PERMANENT_UPGRADES_RESET = 'permanent_upgrades_reset',
+    SETTINGS_SAVED = 'settings_saved',
 }
 
 /**

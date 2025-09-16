@@ -29,7 +29,6 @@ export interface IAudioData {
     audioType: AudioType;
     priority: AudioPriority;
     volume: number;
-    pitch: number;
     loop: boolean;
     fadeIn: boolean;
     fadeOut: boolean;
@@ -133,7 +132,6 @@ export class AudioManager extends Component {
             audioType: AudioType.BGM,
             priority: AudioPriority.HIGH,
             volume: 0.8,
-            pitch: 1.0,
             loop: true,
             fadeIn: true,
             fadeOut: true,
@@ -147,7 +145,6 @@ export class AudioManager extends Component {
             audioType: AudioType.BGM,
             priority: AudioPriority.HIGH,
             volume: 0.8,
-            pitch: 1.0,
             loop: true,
             fadeIn: true,
             fadeOut: true,
@@ -161,7 +158,6 @@ export class AudioManager extends Component {
             audioType: AudioType.BGM,
             priority: AudioPriority.HIGH,
             volume: 0.8,
-            pitch: 1.0,
             loop: true,
             fadeIn: true,
             fadeOut: true,
@@ -176,7 +172,6 @@ export class AudioManager extends Component {
             audioType: AudioType.SFX,
             priority: AudioPriority.NORMAL,
             volume: 0.7,
-            pitch: 1.0,
             loop: false,
             fadeIn: false,
             fadeOut: false,
@@ -190,7 +185,6 @@ export class AudioManager extends Component {
             audioType: AudioType.SFX,
             priority: AudioPriority.NORMAL,
             volume: 0.8,
-            pitch: 1.0,
             loop: false,
             fadeIn: false,
             fadeOut: false,
@@ -204,7 +198,6 @@ export class AudioManager extends Component {
             audioType: AudioType.SFX,
             priority: AudioPriority.NORMAL,
             volume: 0.6,
-            pitch: 1.0,
             loop: false,
             fadeIn: false,
             fadeOut: false,
@@ -218,7 +211,6 @@ export class AudioManager extends Component {
             audioType: AudioType.SFX,
             priority: AudioPriority.NORMAL,
             volume: 0.5,
-            pitch: 1.0,
             loop: false,
             fadeIn: false,
             fadeOut: false,
@@ -232,7 +224,6 @@ export class AudioManager extends Component {
             audioType: AudioType.SFX,
             priority: AudioPriority.NORMAL,
             volume: 0.6,
-            pitch: 1.0,
             loop: false,
             fadeIn: false,
             fadeOut: false,
@@ -247,7 +238,6 @@ export class AudioManager extends Component {
             audioType: AudioType.AMBIENT,
             priority: AudioPriority.LOW,
             volume: 0.3,
-            pitch: 1.0,
             loop: true,
             fadeIn: true,
             fadeOut: true,
@@ -269,7 +259,7 @@ export class AudioManager extends Component {
     /**
      * 播放音频
      */
-    public playAudio(audioId: string, volume?: number, pitch?: number): boolean {
+    public playAudio(audioId: string, volume?: number): boolean {
         const audioData = this._audioData.get(audioId);
         if (!audioData) {
             console.error(`音频数据不存在: ${audioId}`);
@@ -299,7 +289,6 @@ export class AudioManager extends Component {
         // 设置音频属性
         audioSource.clip = audioClip;
         audioSource.volume = this.calculateFinalVolume(audioData, volume);
-        audioSource.pitch = pitch || audioData.pitch;
         audioSource.loop = audioData.loop;
         
         // 播放音频

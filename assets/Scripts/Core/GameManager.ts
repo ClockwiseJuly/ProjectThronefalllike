@@ -2,7 +2,7 @@ import { _decorator, Component, Node, director, game, sys } from 'cc';
 import { EventBus, EventType } from './EventBus';
 import { logger, LogCategory } from './Logger';
 import { resourceManager } from './ResourceManager';
-import { SceneManager } from './SceneManager';
+import { SceneManager, SceneType } from './SceneManager';
 import { GameState, GameStateType } from './GameState';
 const { ccclass, property } = _decorator;
 
@@ -13,6 +13,14 @@ const { ccclass, property } = _decorator;
  */
 @ccclass('GameManager')
 export class GameManager extends Component {
+    protected update(deltaTime: number): void {
+        if (this._isPaused) return;
+        
+        this._gameTime += deltaTime;
+        
+        // 更新各个系统
+        this.updateSystems(deltaTime);
+    }
     private static _instance: GameManager = null;
     
     @property(Node)
@@ -65,34 +73,8 @@ export class GameManager extends Component {
      * 负责初始化各个系统和管理器
      */
     private initializeGame(): void {
-        if (this._isInitialized) {
-            return;
-        }
-        
-        logger.info(LogCategory.GAME, '开始初始化游戏...');
-        
-        // 初始化事件总线
-        const eventBus = EventBus.getInstance();
-        
-        // 初始化资源管理器
-        resourceManager.setAutoRelease(true, 300);
-        
-        // 初始化游戏状态
-        this._gameState = new GameState();
-        
-        // 初始化场景管理器
-        this._sceneManager = this.getComponent(SceneManager) || this.addComponent(SceneManager);
-        
-        // 注册游戏事件监听
-        this._registerEvents();
-        
-        // 标记初始化完成
-        this._isInitialized = true;
-        
-        logger.info(LogCategory.GAME, '游戏初始化完成');
-        
-        // 触发游戏初始化完成事件
-        eventBus.emit(EventType.GAME_START, { initialStart: true });
+        // 调用异步初始化方法
+        this.initializeGameAsync();
     }
     
     /**
@@ -138,7 +120,7 @@ export class GameManager extends Component {
         EventBus.getInstance().emit(EventType.GAME_START, { restart: false });
         
         // 加载主场景
-        this._sceneManager.loadScene(GameStateType.TOWER_DEFENSE);
+        this._sceneManager.loadScene(SceneType.MENU.toString());
     }
     
     /**
@@ -223,21 +205,9 @@ export class GameManager extends Component {
     }
     
     /**
-     * 游戏更新
+     * 异步初始化游戏
      */
-    update(dt: number) {
-        if (this._isPaused) {
-            return;
-        }
-        
-        // 更新游戏时间
-        this._gameTime += dt;
-    }
-    
-    /**
-     * 初始化游戏
-     */
-    private async initializeGame(): Promise<void> {
+    private async initializeGameAsync(): Promise<void> {
         if (this._isInitialized) return;
         
         console.log("游戏初始化开始...");
@@ -278,19 +248,7 @@ export class GameManager extends Component {
         // 注册游戏循环更新
         this.schedule(this.update, 0.016); // 约60FPS
     }
-    
-    /**
-     * 游戏主循环更新
-     */
-    private update(deltaTime: number): void {
-        if (this._isPaused) return;
-        
-        this._gameTime += deltaTime;
-        
-        // 更新各个系统
-        this.updateSystems(deltaTime);
-    }
-    
+
     /**
      * 更新各个系统
      */
@@ -305,32 +263,7 @@ export class GameManager extends Component {
         console.log("启动主菜单");
         // 这里将在后续步骤中实现主菜单逻辑
     }
-    
-    /**
-     * 暂停游戏
-     */
-    public pauseGame(): void {
-        this._isPaused = true;
-        director.pause();
-        console.log("游戏已暂停");
-    }
-    
-    /**
-     * 恢复游戏
-     */
-    public resumeGame(): void {
-        this._isPaused = false;
-        director.resume();
-        console.log("游戏已恢复");
-    }
-    
-    /**
-     * 获取游戏时间
-     */
-    public getGameTime(): number {
-        return this._gameTime;
-    }
-    
+
     /**
      * 获取是否已暂停
      */

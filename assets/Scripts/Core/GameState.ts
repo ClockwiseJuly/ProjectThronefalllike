@@ -19,6 +19,7 @@ export enum GameStateType {
     SETTINGS = 8,       // 设置界面
     INVENTORY = 9,      // 背包界面
     UPGRADE = 10,       // 升级界面
+    PLAYING = 11,       // 游戏进行中
 }
 
 /**
@@ -142,35 +143,11 @@ export class GameState {
     /**
      * 切换游戏状态
      * @param newState 新状态
+     * @deprecated 请使用下方的changeState(newState, immediate)方法
      */
-    public changeState(newState: GameStateType): void {
-        if (this._stateData.currentState === newState) {
-            return;
-        }
-        
-        logger.info(LogCategory.GAME, `游戏状态切换: ${GameStateType[this._stateData.currentState]} -> ${GameStateType[newState]}`);
-        
-        // 保存前一个状态
-        this._stateData.previousState = this._stateData.currentState;
-        // 设置新状态
-        this._stateData.currentState = newState;
-        
-        // 处理特殊状态转换
-        if (newState === GameStateType.TOWER_DEFENSE) {
-            // 进入塔防模式（日间）
-            this._stateData.dayCount++;
-            EventBus.getInstance().emit(EventType.DAY_START, { dayCount: this._stateData.dayCount });
-        } else if (newState === GameStateType.ROGUELIKE) {
-            // 进入肉鸽模式（夜间）
-            this._stateData.nightCount++;
-            EventBus.getInstance().emit(EventType.NIGHT_START, { nightCount: this._stateData.nightCount });
-        }
-        
-        // 触发状态变化事件
-        EventBus.getInstance().emit(EventType.GAME_STATE_CHANGED, {
-            currentState: this._stateData.currentState,
-            previousState: this._stateData.previousState
-        });
+    private _legacyChangeState(newState: GameStateType): void {
+        // 调用新的实现
+        this.changeState(newState, false);
     }
     
     /**
@@ -426,7 +403,7 @@ export class GameState {
      * @param upgradeId 升级ID
      */
     public unlockUpgrade(upgradeId: string): boolean {
-        if (this._gameData.unlockedUpgrades.includes(upgradeId)) {
+        if (this._gameData.unlockedUpgrades.indexOf(upgradeId) !== -1) {
             return false;
         }
         
@@ -448,7 +425,7 @@ export class GameState {
      * @param towerId 塔ID
      */
     public unlockTower(towerId: string): boolean {
-        if (this._gameData.unlockedTowers.includes(towerId)) {
+        if (this._gameData.unlockedTowers.indexOf(towerId) !== -1) {
             return false;
         }
         
@@ -470,7 +447,7 @@ export class GameState {
      * @param abilityId 能力ID
      */
     public unlockAbility(abilityId: string): boolean {
-        if (this._gameData.unlockedAbilities.includes(abilityId)) {
+        if (this._gameData.unlockedAbilities.indexOf(abilityId) !== -1) {
             return false;
         }
         
@@ -514,17 +491,7 @@ export class GameState {
         logger.info(LogCategory.GAME, '重置游戏状态');
         this._initState();
     }
-    
-    /**
-     * 获取游戏状态数据（用于存档）
-     */
-    public getStateData(): any {
-        return {
-            stateData: { ...this._stateData },
-            gameData: { ...this._gameData }
-        };
-    }
-    
+
     /**
      * 加载游戏状态数据（用于读档）
      * @param data 游戏状态数据
@@ -553,7 +520,8 @@ export class GameState {
         }
     }
 
-    private static _instance: GameState = null;
+    // 单例实例
+    private static instance: GameState = null;
     
     private _currentState: GameStateType = GameStateType.NONE;
     private _previousState: GameStateType = GameStateType.NONE;
@@ -569,59 +537,6 @@ export class GameState {
     private _stateExitCallbacks: Map<GameStateType, Function[]> = new Map();
     
     /**
-     * 获取单例实例
-     */
-    public static getInstance(): GameState {
-        if (!GameState._instance) {
-            GameState._instance = new GameState();
-        }
-        return GameState._instance;
-    }
-    
-    /**
-     * 获取当前状态
-     */
-    public getCurrentState(): GameStateType {
-        return this._currentState;
-    }
-    
-    /**
-     * 获取上一个状态
-     */
-    public getPreviousState(): GameStateType {
-        return this._previousState;
-    }
-    
-    /**
-     * 获取游戏模式
-     */
-    public getGameMode(): GameMode {
-        return this._gameMode;
-    }
-    
-    /**
-     * 设置游戏模式
-     */
-    public setGameMode(mode: GameMode): void {
-        this._gameMode = mode;
-        console.log(`游戏模式设置为: ${GameMode[mode]}`);
-    }
-    
-    /**
-     * 获取当前天数
-     */
-    public getDayCount(): number {
-        return this._dayCount;
-    }
-    
-    /**
-     * 获取当前夜数
-     */
-    public getNightCount(): number {
-        return this._nightCount;
-    }
-    
-    /**
      * 增加天数
      */
     public incrementDay(): void {
@@ -635,13 +550,6 @@ export class GameState {
     public incrementNight(): void {
         this._nightCount++;
         console.log(`进入第 ${this._nightCount} 夜`);
-    }
-    
-    /**
-     * 检查是否正在转换状态
-     */
-    public isTransitioning(): boolean {
-        return this._isTransitioning;
     }
     
     /**

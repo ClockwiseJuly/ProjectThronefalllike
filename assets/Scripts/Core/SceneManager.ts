@@ -59,9 +59,11 @@ export class SceneManager {
     // 加载进度
     private _loadingProgress: number = 0;
     // 场景预加载队列
-    private _preloadQueue: string[] = [];
+    private _preloadQueue: SceneType[] = [];
     // 是否正在预加载
     private _isPreloading: boolean = false;
+    // 场景信息映射表（按场景类型索引）
+    private _sceneInfos: Map<SceneType, any> = new Map();
     
     /**
      * 获取单例实例
@@ -78,14 +80,14 @@ export class SceneManager {
      */
     constructor() {
         if (SceneManager._instance) {
-            logger.warn(LogCategory.SCENE, '尝试创建多个SceneManager实例，已使用现有实例');
+            logger.warn('SCENE', '尝试创建多个SceneManager实例，已使用现有实例');
             return SceneManager._instance;
         }
         
         SceneManager._instance = this;
         this._initSceneInfoMap();
         this._registerEvents();
-        logger.info(LogCategory.SCENE, '场景管理器初始化完成');
+        logger.info('SCENE', '场景管理器初始化完成');
     }
     
     /**
@@ -143,13 +145,13 @@ export class SceneManager {
      */
     private _registerEvents(): void {
         // 监听场景加载完成事件
-        director.on(Director.EVENT_AFTER_SCENE_LAUNCH, this._onSceneLaunched, this);
+        director.on(EventType.EVENT_AFTER_SCENE_LAUNCH, this._onSceneLaunched);
         
         // 监听游戏状态变化事件
-        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
         
         // 监听日夜转换事件
-        EventBus.getInstance().on(EventType.DAY_NIGHT_TRANSITION, this._onDayNightTransition, this);
+        EventBus.getInstance().on(EventType.DAY_NIGHT_TRANSITION, this._onDayNightTransition);
     }
     
     /**
@@ -163,7 +165,7 @@ export class SceneManager {
         this._loadingStatus = SceneLoadingStatus.COMPLETED;
         this._loadingProgress = 1;
         
-        logger.info(LogCategory.SCENE, `场景加载完成: ${this._currentScene.name}`);
+        logger.info('SCENE', `场景加载完成: ${this._currentScene.name}`);
         
         // 触发场景加载完成事件
         EventBus.getInstance().emit(EventType.SCENE_LOADED, {
@@ -201,7 +203,7 @@ export class SceneManager {
      */
     private _onDayNightTransition(data: any): void {
         // 在日夜转换期间可以执行一些特殊效果
-        logger.info(LogCategory.SCENE, `日夜转换: ${data.toDayTime ? '夜->日' : '日->夜'}`);
+        logger.info('SCENE', `日夜转换: ${data.toDayTime ? '夜->日' : '日->夜'}`);
     }
             /**
      * 注册场景信息
@@ -209,12 +211,13 @@ export class SceneManager {
      */
     public registerScene(sceneInfo: ISceneInfo): void {
         if (this._sceneInfoMap.has(sceneInfo.name)) {
-            logger.warn(LogCategory.SCENE, `场景已注册: ${sceneInfo.name}`);
+            logger.warn('SCENE', `场景已注册: ${sceneInfo.name}`);
             return;
         }
         
         this._sceneInfoMap.set(sceneInfo.name, sceneInfo);
-        logger.info(LogCategory.SCENE, `注册场景: ${sceneInfo.name}`);
+        this._sceneInfos.set(sceneInfo.type, sceneInfo);
+        logger.info('SCENE', `注册场景: ${sceneInfo.name}`);
     }
     
     /**
@@ -262,13 +265,13 @@ export class SceneManager {
         const sceneInfo = this._sceneInfoMap.get(sceneName);
         
         if (!sceneInfo) {
-            logger.error(LogCategory.SCENE, `场景不存在: ${sceneName}`);
+            logger.error('SCENE', `场景不存在: ${sceneName}`);
             return;
         }
         
         // 如果当前正在加载场景，则忽略
         if (this._loadingStatus === SceneLoadingStatus.LOADING) {
-            logger.warn(LogCategory.SCENE, `场景正在加载中，忽略加载请求: ${sceneName}`);
+            logger.warn('SCENE', `场景正在加载中，忽略加载请求: ${sceneName}`);
             return;
         }
         
@@ -282,7 +285,7 @@ export class SceneManager {
             this._currentScene.data = { ...this._currentScene.data, ...params };
         }
         
-        logger.info(LogCategory.SCENE, `开始加载场景: ${sceneName}`);
+        logger.info('SCENE', `开始加载场景: ${sceneName}`);
         
         // 更新加载状态
         this._loadingStatus = SceneLoadingStatus.LOADING;
@@ -297,11 +300,11 @@ export class SceneManager {
         // 如果有预加载资源，先加载资源再加载场景
         if (sceneInfo.preloadResources && sceneInfo.preloadResources.length > 0) {
             this._preloadSceneResources(sceneInfo, () => {
-                this._doLoadScene(sceneInfo.path);
+                director.loadScene(sceneInfo.path);
             });
         } else {
             // 直接加载场景
-            this._doLoadScene(sceneInfo.path);
+            director.loadScene(sceneInfo.path);
         }
     }
     
@@ -314,11 +317,11 @@ export class SceneManager {
         const resources = sceneInfo.preloadResources;
         let loadedCount = 0;
         
-        logger.info(LogCategory.SCENE, `预加载场景资源: ${sceneInfo.name}, 资源数: ${resources.length}`);
+        logger.info('SCENE', `预加载场景资源: ${sceneInfo.name}, 资源数: ${resources.length}`);
         
         // 遍历预加载资源
         resources.forEach(path => {
-            resourceManager.loadResource(path, (err, asset) => {
+            resourceManager.loadAsset(path, null, 'resources', null, (err, asset) => {
                 loadedCount++;
                 
                 // 更新加载进度
@@ -337,67 +340,10 @@ export class SceneManager {
             });
         });
     }
-    
-    /**
-     * 执行场景加载
-     * @param scenePath 场景路径
-     */
-    private _doLoadScene(scenePath: string): void {
-        // 加载场景
-        director.loadScene(scenePath, (err, scene) => {
-            if (err) {
-                logger.error(LogCategory.SCENE, `场景加载失败: ${scenePath}`, err);
-                
-                this._loadingStatus = SceneLoadingStatus.FAILED;
-                
-                // 触发场景加载失败事件
-                EventBus.getInstance().emit(EventType.SCENE_LOAD_FAILED, {
-                    sceneName: this._currentScene.name,
-                    error: err
-                });
-                
-                return;
-            }
-            
-            // 场景加载成功，更新进度为75%（剩余25%在场景启动完成后更新）
-            this._loadingProgress = 0.75;
-            
-            // 触发加载进度事件
-            EventBus.getInstance().emit(EventType.SCENE_LOADING_PROGRESS, {
-                progress: this._loadingProgress,
-                sceneName: this._currentScene.name
-            });
-        });
-    }
-    
-    /**
-     * 预加载场景
-     * @param sceneName 场景名称
-     */
-    public preloadScene(sceneName: string): void {
-        const sceneInfo = this._sceneInfoMap.get(sceneName);
-        
-        if (!sceneInfo) {
-            logger.error(LogCategory.SCENE, `场景不存在: ${sceneName}`);
-            return;
-        }
-        
-        // 如果场景已在预加载队列中，则忽略
-        if (this._preloadQueue.includes(sceneName)) {
-            return;
-        }
-        
-        // 添加到预加载队列
-        this._preloadQueue.push(sceneName);
-        
-        // 如果当前没有正在预加载的场景，则开始预加载
-        if (!this._isPreloading) {
-            this._processPreloadQueue();
-        }
-    }
-    
+
     /**
      * 处理预加载队列
+     * @param sceneName 场景名称
      */
     private _processPreloadQueue(): void {
         if (this._preloadQueue.length === 0) {
@@ -409,9 +355,9 @@ export class SceneManager {
         
         // 取出队列中的第一个场景
         const sceneName = this._preloadQueue.shift();
-        const sceneInfo = this._sceneInfoMap.get(sceneName);
+        const sceneInfo = this._sceneInfoMap.get(sceneName.toString());
         
-        logger.info(LogCategory.SCENE, `开始预加载场景: ${sceneName}`);
+        logger.info('SCENE', `开始预加载场景: ${sceneName}`);
         
         // 预加载场景资源
         if (sceneInfo.preloadResources && sceneInfo.preloadResources.length > 0) {
@@ -419,7 +365,7 @@ export class SceneManager {
             
             // 遍历预加载资源
             sceneInfo.preloadResources.forEach(path => {
-                resourceManager.loadResource(path, (err, asset) => {
+                resourceManager.loadAsset(path, null, 'resources', null, (err, asset) => {
                     loadedCount++;
                     
                     // 所有资源加载完成后预加载场景
@@ -427,9 +373,9 @@ export class SceneManager {
                         // 预加载场景
                         director.preloadScene(sceneInfo.path, (err) => {
                             if (err) {
-                                logger.error(LogCategory.SCENE, `场景预加载失败: ${sceneName}`, err);
+                                logger.error('SCENE', `场景预加载失败: ${sceneName}`, err);
                             } else {
-                                logger.info(LogCategory.SCENE, `场景预加载完成: ${sceneName}`);
+                                logger.info('SCENE', `场景预加载完成: ${sceneName}`);
                             }
                             
                             // 继续处理队列中的下一个场景
@@ -442,9 +388,9 @@ export class SceneManager {
             // 直接预加载场景
             director.preloadScene(sceneInfo.path, (err) => {
                 if (err) {
-                    logger.error(LogCategory.SCENE, `场景预加载失败: ${sceneName}`, err);
+                    logger.error('SCENE', `场景预加载失败: ${sceneName}`, err);
                 } else {
-                    logger.info(LogCategory.SCENE, `场景预加载完成: ${sceneName}`);
+                    logger.info('SCENE', `场景预加载完成: ${sceneName}`);
                 }
                 
                 // 继续处理队列中的下一个场景
@@ -458,7 +404,7 @@ export class SceneManager {
      */
     public backToPreviousScene(): void {
         if (!this._previousScene) {
-            logger.warn(LogCategory.SCENE, '没有上一个场景记录');
+            logger.warn('SCENE', '没有上一个场景记录');
             return;
         }
         
@@ -470,7 +416,7 @@ export class SceneManager {
      */
     public reloadCurrentScene(): void {
         if (!this._currentScene) {
-            logger.warn(LogCategory.SCENE, '当前没有加载的场景');
+            logger.warn('SCENE', '当前没有加载的场景');
             return;
         }
         
@@ -483,7 +429,7 @@ export class SceneManager {
      * @param dungeonSize 地牢大小
      */
     public generateRoguelikeDungeon(dungeonLevel: number, dungeonSize: number): void {
-        logger.info(LogCategory.SCENE, `生成肉鸽地牢: 等级=${dungeonLevel}, 大小=${dungeonSize}`);
+        logger.info('SCENE', `生成肉鸽地牢: 等级=${dungeonLevel}, 大小=${dungeonSize}`);
         
         // 设置肉鸽场景参数
         const dungeonParams = {
@@ -503,7 +449,7 @@ export class SceneManager {
      * @param difficulty 难度系数
      */
     public generateTowerDefenseLevel(level: number, difficulty: number): void {
-        logger.info(LogCategory.SCENE, `生成塔防关卡: 等级=${level}, 难度=${difficulty}`);
+        logger.info('SCENE', `生成塔防关卡: 等级=${level}, 难度=${difficulty}`);
         
         // 设置塔防场景参数
         const levelParams = {
@@ -522,9 +468,9 @@ export class SceneManager {
      */
     public destroy(): void {
         // 移除事件监听
-        director.off(Director.EVENT_AFTER_SCENE_LAUNCH, this._onSceneLaunched, this);
-        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
-        EventBus.getInstance().off(EventType.DAY_NIGHT_TRANSITION, this._onDayNightTransition, this);
+        EventBus.getInstance().off(EventType.EVENT_AFTER_SCENE_LAUNCH, this._onSceneLaunched);
+        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
+        EventBus.getInstance().off(EventType.DAY_NIGHT_TRANSITION, this._onDayNightTransition);
         
         // 清空场景信息
         this._sceneInfoMap.clear();
@@ -550,14 +496,14 @@ export class SceneManager {
                 sceneType: SceneType.INVENTORY,
                 sceneName: "Inventory",
                 isLoaded: false,
-                loadState: SceneLoadState.NONE,
+                loadState: SceneLoadingStatus.NONE,
                 preloadAssets: ["UI/Inventory", "Items"]
             },
             {
                 sceneType: SceneType.UPGRADE,
                 sceneName: "Upgrade",
                 isLoaded: false,
-                loadState: SceneLoadState.NONE,
+                loadState: SceneLoadingStatus.NONE,
                 preloadAssets: ["UI/Upgrade", "Items"]
             }
         ];
@@ -572,31 +518,11 @@ export class SceneManager {
      */
     private startPreloading(): void {
         // 添加重要场景到预加载队列
-        this._preloadQueue.push(SceneType.MAIN_MENU);
+        this._preloadQueue.push(SceneType.MENU);
         this._preloadQueue.push(SceneType.TOWER_DEFENSE);
         this._preloadQueue.push(SceneType.ROGUELIKE);
         
-        this.processPreloadQueue();
-    }
-    
-    /**
-     * 处理预加载队列
-     */
-    private async processPreloadQueue(): Promise<void> {
-        if (this._isPreloading || this._preloadQueue.length === 0) {
-            return;
-        }
-        
-        this._isPreloading = true;
-        console.log("开始预加载场景");
-        
-        while (this._preloadQueue.length > 0) {
-            const sceneType = this._preloadQueue.shift()!;
-            await this.preloadScene(sceneType);
-        }
-        
-        this._isPreloading = false;
-        console.log("场景预加载完成");
+        this._processPreloadQueue();
     }
     
     /**
@@ -621,13 +547,13 @@ export class SceneManager {
             await this.preloadAssets(sceneInfo.preloadAssets);
             
             // 标记为已预加载
-            sceneInfo.loadState = SceneLoadState.LOADED;
+            sceneInfo.loadState = SceneLoadingStatus.COMPLETED;
             sceneInfo.isLoaded = true;
             
             console.log(`场景预加载完成: ${sceneType}`);
         } catch (error) {
             console.error(`场景预加载失败: ${sceneType}`, error);
-            sceneInfo.loadState = SceneLoadState.FAILED;
+            sceneInfo.loadState = SceneLoadingStatus.FAILED;
         }
     }
     
@@ -641,49 +567,6 @@ export class SceneManager {
             console.log(`预加载资源: ${path}`);
             // 模拟异步加载
             await new Promise(resolve => setTimeout(resolve, 100));
-        }
-    }
-    
-    /**
-     * 加载场景
-     */
-    public async loadScene(sceneType: SceneType, showLoading: boolean = true): Promise<boolean> {
-        if (this._isLoading) {
-            console.warn("正在加载场景中，请等待完成");
-            return false;
-        }
-        
-        if (this._currentScene === sceneType) {
-            console.log(`场景已经是: ${sceneType}`);
-            return true;
-        }
-        
-        console.log(`加载场景: ${sceneType}`);
-        
-        this._isLoading = true;
-        this._previousScene = this._currentScene;
-        
-        try {
-            // 显示加载界面
-            if (showLoading) {
-                await this.showLoadingScene();
-            }
-            
-            // 卸载当前场景
-            await this.unloadCurrentScene();
-            
-            // 加载新场景
-            await this.loadNewScene(sceneType);
-            
-            this._currentScene = sceneType;
-            console.log(`场景加载完成: ${sceneType}`);
-            
-            return true;
-        } catch (error) {
-            console.error(`场景加载失败: ${sceneType}`, error);
-            return false;
-        } finally {
-            this._isLoading = false;
         }
     }
     
@@ -736,25 +619,11 @@ export class SceneManager {
             });
             
             sceneInfo.isLoaded = true;
-            sceneInfo.loadState = SceneLoadState.LOADED;
+            sceneInfo.loadState = SceneLoadingStatus.COMPLETED;
         } catch (error) {
-            sceneInfo.loadState = SceneLoadState.FAILED;
+            sceneInfo.loadState = SceneLoadingStatus.FAILED;
             throw error;
         }
-    }
-    
-    /**
-     * 获取当前场景
-     */
-    public getCurrentScene(): SceneType {
-        return this._currentScene;
-    }
-    
-    /**
-     * 获取上一个场景
-     */
-    public getPreviousScene(): SceneType {
-        return this._previousScene;
     }
     
     /**
@@ -769,37 +638,25 @@ export class SceneManager {
      * 检查是否正在加载
      */
     public isLoading(): boolean {
-        return this._isLoading;
+        return this._loadingStatus === SceneLoadingStatus.LOADING;
     }
     
     /**
      * 添加场景到预加载队列
      */
     public addToPreloadQueue(sceneType: SceneType): void {
-        if (!this._preloadQueue.includes(sceneType)) {
+        if (this._preloadQueue.indexOf(sceneType) === -1) {
             this._preloadQueue.push(sceneType);
-            this.processPreloadQueue();
+            this._processPreloadQueue();
         }
-    }
-    
-    /**
-     * 重新加载当前场景
-     */
-    public async reloadCurrentScene(): Promise<boolean> {
-        const currentScene = this._currentScene;
-        this._currentScene = SceneType.MAIN_MENU; // 临时设置
-        return await this.loadScene(currentScene);
     }
     
     /**
      * 清理场景缓存
      */
     public clearSceneCache(): void {
-        this._sceneCache.clear();
-        this._sceneInfos.forEach(info => {
-            info.isLoaded = false;
-            info.loadState = SceneLoadState.NONE;
-        });
+        this._sceneInfoMap.clear();
+        this._sceneInfos.clear();
         console.log("场景缓存已清理");
     }
     

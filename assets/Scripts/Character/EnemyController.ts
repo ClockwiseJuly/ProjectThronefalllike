@@ -174,10 +174,10 @@ export class EnemyController extends BaseCharacter {
         super._registerEvents();
         
         // 监听玩家攻击事件
-        EventBus.getInstance().on(EventType.PLAYER_ATTACK, this._onPlayerAttack, this);
+        EventBus.getInstance().on(EventType.PLAYER_ATTACKED, this._onPlayerAttack);
         
         // 监听游戏状态变化事件
-        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
     }
     
     /**
@@ -187,10 +187,10 @@ export class EnemyController extends BaseCharacter {
         super._unregisterEvents();
         
         // 注销玩家攻击事件
-        EventBus.getInstance().off(EventType.PLAYER_ATTACK, this._onPlayerAttack, this);
+        EventBus.getInstance().off(EventType.PLAYER_ATTACKED, this._onPlayerAttack);
         
         // 注销游戏状态变化事件
-        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().off(EventType.GAME_STATE_CHANGED, this._onGameStateChanged);
     }
     
     /**
@@ -648,7 +648,9 @@ export class EnemyController extends BaseCharacter {
         }
         
         // 获取当前场景中的玩家控制器
-        const players = GameManager.getInstance().getCurrentScene().getComponentsInChildren(PlayerController);
+        const scene = this.node.scene;
+        //const scene = director.getScene();
+        const players = scene.getComponentsInChildren(PlayerController);
         
         // 选择最近的玩家作为目标
         let nearestPlayer: PlayerController = null;

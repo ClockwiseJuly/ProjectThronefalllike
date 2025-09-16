@@ -1,9 +1,9 @@
 import { _decorator } from 'cc';
 import { logger, LogCategory } from '../Core/Logger';
-import { eventBus, EventType } from '../Core/EventBus';
+import { EventBus, EventType } from '../Core/EventBus';
 import { resourceManager } from '../Core/ResourceManager';
-import { gameState } from '../Core/GameState';
-import { BaseCharacter, CharacterCamp } from '../Character/BaseCharacter';
+import { GameState } from '../Core/GameState';
+import { BaseCharacter, CharacterFaction } from '../Character/BaseCharacter';
 
 /**
  * 战斗系统
@@ -63,13 +63,13 @@ export class CombatSystem {
      */
     private _registerEvents(): void {
         // 角色创建事件
-        eventBus.on(EventType.CHARACTER_CREATED, this._onCharacterCreated, this);
+        EventBus.getInstance().on(EventType.CHARACTER_CREATED, this._onCharacterCreated.bind(this));
         // 角色死亡事件
-        eventBus.on(EventType.CHARACTER_DIED, this._onCharacterDied, this);
+        EventBus.getInstance().on(EventType.CHARACTER_DEATH, this._onCharacterDied.bind(this));
         // 游戏状态变化事件
-        eventBus.on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged.bind(this));
         // 日夜切换事件
-        eventBus.on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged, this);
+        EventBus.getInstance().on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged.bind(this));
     }
     
     /**
@@ -77,27 +77,35 @@ export class CombatSystem {
      * @param character 角色实例
      */
     private _onCharacterCreated(character: BaseCharacter): void {
-        if (!character || !character.id) {
+        if (!character) {
             logger.warn(LogCategory.COMBAT, '尝试添加无效角色到战斗系统');
             return;
         }
         
+        // 使用角色的uuid或node.uuid作为唯一标识符
+        const characterId = character.uuid || (character.node && character.node.uuid);
+        
+        if (!characterId) {
+            logger.warn(LogCategory.COMBAT, '角色缺少有效的唯一标识符');
+            return;
+        }
+        
         // 添加到战斗单位列表
-        this._combatUnits.set(character.id, character);
+        this._combatUnits.set(characterId, character);
         
         // 根据阵营分类
-        if (character.camp === CharacterCamp.ENEMY) {
+        if (character.faction === CharacterFaction.ENEMY) {
             this._enemies.push(character);
-        } else if (character.camp === CharacterCamp.ALLY) {
+        } else if (character.faction === CharacterFaction.FRIENDLY) {
             this._allies.push(character);
         }
         
         // 如果是塔防单位，添加到塔防单位列表
-        if (character.isTowerUnit) {
+        if (character.faction === CharacterFaction.TOWER) {
             this._towerUnits.push(character);
         }
         
-        logger.debug(LogCategory.COMBAT, `角色添加到战斗系统: ${character.id}, 阵营: ${character.camp}`);
+        logger.debug(LogCategory.COMBAT, `角色添加到战斗系统: ${characterId}, 阵营: ${character.faction}`);
     }
     
     /**
@@ -105,20 +113,27 @@ export class CombatSystem {
      * @param character 角色实例
      */
     private _onCharacterDied(character: BaseCharacter): void {
-        if (!character || !character.id) {
+        if (!character) {
+            return;
+        }
+        
+        // 使用角色的uuid或node.uuid作为唯一标识符
+        const characterId = character.uuid || (character.node && character.node.uuid);
+        
+        if (!characterId) {
             return;
         }
         
         // 从战斗单位列表中移除
-        this._combatUnits.delete(character.id);
+        this._combatUnits.delete(characterId);
         
         // 从对应阵营列表中移除
-        if (character.camp === CharacterCamp.ENEMY) {
+        if (character.faction === CharacterFaction.ENEMY) {
             const index = this._enemies.indexOf(character);
             if (index >= 0) {
                 this._enemies.splice(index, 1);
             }
-        } else if (character.camp === CharacterCamp.ALLY) {
+        } else if (character.faction === CharacterFaction.FRIENDLY) {
             const index = this._allies.indexOf(character);
             if (index >= 0) {
                 this._allies.splice(index, 1);
@@ -126,14 +141,14 @@ export class CombatSystem {
         }
         
         // 如果是塔防单位，从塔防单位列表中移除
-        if (character.isTowerUnit) {
+        if (character.faction === CharacterFaction.TOWER) {
             const index = this._towerUnits.indexOf(character);
             if (index >= 0) {
                 this._towerUnits.splice(index, 1);
             }
         }
         
-        logger.debug(LogCategory.COMBAT, `角色从战斗系统移除: ${character.id}`);
+        logger.debug(LogCategory.COMBAT, `角色从战斗系统移除: ${characterId}`);
     }
     
     /**
@@ -205,13 +220,13 @@ export class CombatSystem {
         switch (damageType) {
             case CombatSystem.DamageType.PHYSICAL:
                 // 物理伤害计算：考虑攻击力和护甲
-                finalDamage = baseDamage * (attacker.attributes.attack / 100) * (1 - target.attributes.defense / (100 + target.attributes.defense));
+                finalDamage = baseDamage * (attacker.attributes.attackPower / 100) * (1 - target.attributes.defense / (100 + target.attributes.defense));
                 break;
                 
-            case CombatSystem.DamageType.MAGICAL:
+            //case CombatSystem.DamageType.MAGICAL:
                 // 魔法伤害计算：考虑魔法强度和魔法抗性
-                finalDamage = baseDamage * (attacker.attributes.magicPower / 100) * (1 - target.attributes.magicResistance / (100 + target.attributes.magicResistance));
-                break;
+                //finalDamage = baseDamage * (attacker.attributes.magicalPower / 100) * (1 - target.attributes.magicResistance / (100 + target.attributes.magicResistance));
+                //break;
                 
             case CombatSystem.DamageType.TRUE:
                 // 真实伤害：不受防御和抗性影响
@@ -246,10 +261,10 @@ export class CombatSystem {
         const finalDamage = this.calculateDamage(attacker, target, damage, damageType);
         
         // 应用伤害到目标
-        target.takeDamage(finalDamage, damageType, attacker);
+        target.takeDamage(finalDamage);
         
         // 触发伤害事件
-        eventBus.emit(EventType.DAMAGE_DEALT, {
+        EventBus.getInstance().emit('damage_dealt', {
             attacker,
             target,
             damage: finalDamage,
@@ -297,7 +312,7 @@ export class CombatSystem {
         }
         
         // 确定目标列表（敌对阵营）
-        const targetList = character.camp === CharacterCamp.ENEMY ? this._allies : this._enemies;
+        const targetList = character.faction === CharacterFaction.ENEMY ? this._allies : this._enemies;
         if (targetList.length === 0) {
             return null;
         }
@@ -345,7 +360,7 @@ export class CombatSystem {
         }
         
         // 确定目标列表（敌对阵营）
-        const targetList = character.camp === CharacterCamp.ENEMY ? this._allies : this._enemies;
+        const targetList = character.faction === CharacterFaction.ENEMY ? this._allies : this._enemies;
         if (targetList.length === 0) {
             return [];
         }

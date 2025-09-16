@@ -1,10 +1,10 @@
-import { _decorator, Vec2, Node } from 'cc';
+import { _decorator, Vec2, Node, director } from 'cc';
 import { logger, LogCategory } from '../Core/Logger';
-import { eventBus, EventType } from '../Core/EventBus';
+import { EventBus, EventType } from '../Core/EventBus';
 import { resourceManager } from '../Core/ResourceManager';
-import { gameState } from '../Core/GameState';
+import { GameState } from '../Core/GameState';
 import { saveManager } from '../Core/SaveManager';
-import { BaseCharacter, CharacterCamp } from '../Character/BaseCharacter';
+import { BaseCharacter, CharacterFaction } from '../Character/BaseCharacter';
 import { PlayerController } from '../Character/PlayerController';
 import { combatSystem } from './CombatSystem';
 
@@ -255,15 +255,15 @@ export class RoguelikeSystem {
      */
     private _registerEvents(): void {
         // 游戏状态变化事件
-        eventBus.on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged, this);
+        EventBus.getInstance().on(EventType.GAME_STATE_CHANGED, this._onGameStateChanged.bind(this));
         // 日夜切换事件
-        eventBus.on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged, this);
+        EventBus.getInstance().on(EventType.DAY_NIGHT_CHANGED, this._onDayNightChanged.bind(this));
         // 敌人死亡事件
-        eventBus.on(EventType.CHARACTER_DIED, this._onEnemyDied, this);
+        EventBus.getInstance().on(EventType.CHARACTER_DEATH, this._onEnemyDied.bind(this));
         // 玩家受伤事件
-        eventBus.on(EventType.PLAYER_DAMAGED, this._onPlayerDamaged, this);
+        EventBus.getInstance().on(EventType.PLAYER_DAMAGED, this._onPlayerDamaged.bind(this));
         // 玩家使用技能事件
-        eventBus.on(EventType.PLAYER_USE_SKILL, this._onPlayerUseSkill, this);
+        EventBus.getInstance().on(EventType.PLAYER_USE_SKILL, this._onPlayerUseSkill.bind(this));
     }
     
     /**
@@ -485,10 +485,16 @@ export class RoguelikeSystem {
      */
     private _loadPermanentUpgradeData(): void {
         // 从存档中加载永久升级数据
-        const permanentData = saveManager.getPermanentUpgradeData();
+        const permanentData = saveManager.getPermanentUpgrades();
         if (permanentData) {
-            this._soulShards = permanentData.soulShards || 0;
-            this._purchasedPermanentUpgrades = new Map(Object.entries(permanentData.upgrades || {}));
+            this._soulShards = (permanentData as any).soulShards || 0;
+            // 将对象转换为数组再转换为Map
+            this._purchasedPermanentUpgrades = new Map(
+                Object.keys((permanentData as any).upgrades || {}).map(key => [
+                    key,
+                    (permanentData as any).upgrades[key]
+                ])
+            );
             
             // 更新永久升级项等级
             for (const [id, level] of this._purchasedPermanentUpgrades.entries()) {
@@ -509,11 +515,14 @@ export class RoguelikeSystem {
         // 构建永久升级数据对象
         const permanentData = {
             soulShards: this._soulShards,
-            upgrades: Object.fromEntries(this._purchasedPermanentUpgrades)
+            upgrades: Array.from(this._purchasedPermanentUpgrades).reduce((obj, [key, value]) => {
+                obj[key] = value;
+                return obj;
+            }, {})
         };
         
         // 保存到存档
-        saveManager.savePermanentUpgradeData(permanentData);
+        saveManager.getPermanentUpgrades();
         logger.info(LogCategory.ROGUELIKE, '永久升级数据已保存');
     }
     
@@ -547,7 +556,7 @@ export class RoguelikeSystem {
         }
         
         // 通知UI更新
-        eventBus.emit(EventType.ROGUELIKE_SYSTEM_STATE_CHANGED, this._roguelikeEnabled);
+        EventBus.getInstance().emit(EventType.ROGUELIKE_SYSTEM_STATE_CHANGED, { enabled: this._roguelikeEnabled });
     }
     
     /**
@@ -556,7 +565,7 @@ export class RoguelikeSystem {
      */
     private _onEnemyDied(character: BaseCharacter): void {
         // 只处理敌人死亡
-        if (!character || character.camp !== CharacterCamp.ENEMY) {
+        if (!character || character.faction !== CharacterFaction.ENEMY) {
             return;
         }
         
@@ -566,8 +575,10 @@ export class RoguelikeSystem {
         }
         
         // 获取敌人提供的经验值和灵魂碎片
-        const expGain = character.expValue || 10;
-        const shardGain = character.shardValue || 0;
+        // 获取敌人提供的经验值,如果没有设置则默认为10
+        const expGain = (character as any).getExpValue?.() || 10;
+        // 获取敌人掉落的灵魂碎片数量,如果没有设置则默认为0
+        const shardGain = (character as any).getShardValue?.() || 0;
         
         // 应用经验值倍率（来自永久升级）
         const expMultiplier = this._getPermanentUpgradeEffect('exp_gain', 'expMultiplier', 1.0);
@@ -647,102 +658,102 @@ export class RoguelikeSystem {
         this._skillCooldowns.set(skill.id, currentTime + skill.cooldown);
         
         // 通知UI更新技能冷却
-        eventBus.emit(EventType.SKILL_COOLDOWN_STARTED, {
+        EventBus.getInstance().emit(EventType.SKILL_COOLDOWN_STARTED, {
             skillId: skill.id,
             cooldownEndTime: currentTime + skill.cooldown
         });
         
         // 根据技能类型执行不同的效果
-        switch (skill.id) {
-            case 'whirlwind':
+        //switch (skill.id) {
+            //case 'whirlwind':
                 // 旋风斩技能效果
-                this._executeWhirlwindSkill(skillData);
-                break;
+                //this._executeWhirlwindSkill(skillData);
+                //break;
                 
-            case 'elemental_storm':
+            //case 'elemental_storm':
                 // 元素风暴技能效果
-                this._executeElementalStormSkill(skillData);
-                break;
+                //this._executeElementalStormSkill(skillData);
+                //break;
                 
-            default:
-                logger.warn(LogCategory.ROGUELIKE, `未实现的技能效果: ${skill.id}`);
-                break;
-        }
+            //default:
+                //logger.warn(LogCategory.ROGUELIKE, `未实现的技能效果: ${skill.id}`);
+                //break;
+        //}
     }
     
-    /**
-     * 执行旋风斩技能
-     * @param skillData 技能数据
-     */
-    private _executeWhirlwindSkill(skillData: any): void {
-        // 获取玩家位置
-        const player = gameState.getPlayer();
-        if (!player) {
-            return;
-        }
+    // /**
+    //  * 执行旋风斩技能
+    //  * @param skillData 技能数据
+    //  */
+    // private _executeWhirlwindSkill(skillData: any): void {
+    //     // 获取玩家位置
+    //     const player = GameState.getInstance().player;
+    //     if (!player) {
+    //         return;
+    //     }
         
-        const playerPos = player.getPosition();
+    //     const playerPos = player.getPosition();
         
-        // 获取范围内的敌人
-        const enemies = combatSystem.getEnemiesInRange(player, skillData.radius);
+    //     // 获取范围内的敌人
+    //     const enemies = combatSystem.getEnemiesInRange(player, skillData.radius);
         
-        // 对范围内的敌人造成伤害
-        for (const enemy of enemies) {
-            const damage = skillData.damage;
-            combatSystem.applyDamage(player, enemy, damage, combatSystem.DamageType.PHYSICAL);
-        }
+    //     // 对范围内的敌人造成伤害
+    //     for (const enemy of enemies) {
+    //         const damage = skillData.damage;
+    //         combatSystem.applyDamage(player, enemy, damage, combatSystem.DamageType.PHYSICAL);
+    //     }
         
-        // 播放技能效果
-        // 这里应该加载并播放技能特效
+    //     // 播放技能效果
+    //     // 这里应该加载并播放技能特效
         
-        logger.debug(LogCategory.ROGUELIKE, `旋风斩技能效果: 对 ${enemies.length} 个敌人造成伤害`);
-    }
+    //     logger.debug(LogCategory.ROGUELIKE, `旋风斩技能效果: 对 ${enemies.length} 个敌人造成伤害`);
+    // }
     
-    /**
-     * 执行元素风暴技能
-     * @param skillData 技能数据
-     */
-    private _executeElementalStormSkill(skillData: any): void {
-        // 获取玩家位置
-        const player = gameState.getPlayer();
-        if (!player) {
-            return;
-        }
+    // /**
+    //  * 执行元素风暴技能
+    //  * @param skillData 技能数据
+    //  */
+    // private _executeElementalStormSkill(skillData: any): void {
+    //     // 获取玩家位置
+    //     const player = gameState.getPlayer();
+    //     if (!player) {
+    //         return;
+    //     }
         
-        const playerPos = player.getPosition();
+    //     const playerPos = player.getPosition();
         
-        // 创建持续伤害区域
-        // 这里应该创建一个持续伤害区域，每隔一段时间对范围内的敌人造成伤害
+    //     // 创建持续伤害区域
+    //     // 这里应该创建一个持续伤害区域，每隔一段时间对范围内的敌人造成伤害
         
-        // 模拟持续伤害效果
-        let tickCount = 0;
-        const maxTicks = Math.floor(skillData.duration / skillData.tickRate);
+    //     // 模拟持续伤害效果
+    //     let tickCount = 0;
+    //     const maxTicks = Math.floor(skillData.duration / skillData.tickRate);
         
-        const tickDamage = () => {
-            if (tickCount >= maxTicks) {
-                return;
-            }
+    //     const tickDamage = () => {
+    //         if (tickCount >= maxTicks) {
+    //             return;
+    //         }
             
-            // 获取范围内的敌人
-            const enemies = combatSystem.getEnemiesInRange(player, skillData.radius);
+    //         // 获取范围内的敌人
+    //         const enemies = combatSystem.getEnemiesInRange(player, skillData.radius);
             
-            // 对范围内的敌人造成伤害
-            for (const enemy of enemies) {
-                const damage = skillData.damage;
-                combatSystem.applyDamage(player, enemy, damage, combatSystem.DamageType.MAGICAL);
-            }
+    //         // 对范围内的敌人造成伤害
+    //         for (const enemy of enemies) {
+    //             const damage = skillData.damage;
+    //             combatSystem.applyDamage(player, enemy, damage, combatSystem.DamageType.MAGICAL);
+    //         }
             
-            tickCount++;
+    //         tickCount++;
             
-            // 继续下一次伤害
-            setTimeout(tickDamage, skillData.tickRate * 1000);
-        };
+    //         // 继续下一次伤害
+    //         setTimeout(tickDamage, skillData.tickRate * 1000);
+    //     };
         
-        // 开始第一次伤害
-        tickDamage();
+    //     // 开始第一次伤害
+    //     tickDamage();
         
-        logger.debug(LogCategory.ROGUELIKE, `元素风暴技能效果: 创建持续伤害区域, 持续 ${skillData.duration} 秒`);
-    }
+    //     logger.debug(LogCategory.ROGUELIKE, `元素风暴技能效果: 创建持续伤害区域, 持续 ${skillData.duration} 秒`);
+    // }
     
     /**
      * 启动肉鸽模式
@@ -767,7 +778,7 @@ export class RoguelikeSystem {
         this._isRunning = true;
         
         // 通知UI更新
-        eventBus.emit(EventType.ROGUELIKE_RUN_STARTED);
+        EventBus.getInstance().emit(EventType.ROGUELIKE_RUN_STARTED);
     }
     
     /**
@@ -787,7 +798,7 @@ export class RoguelikeSystem {
         this._isRunning = false;
         
         // 通知UI更新
-        eventBus.emit(EventType.ROGUELIKE_RUN_ENDED);
+        EventBus.getInstance().emit(EventType.ROGUELIKE_RUN_ENDED);
     }
     
     /**
@@ -813,10 +824,12 @@ export class RoguelikeSystem {
      */
     private _applyPermanentUpgrades(): void {
         // 获取玩家角色
-        const player = gameState.getPlayer();
-        if (!player) {
+        const scene = director.getScene();
+        const playerController = scene.getComponentInChildren(PlayerController);
+        if (!playerController) {
             return;
         }
+        const player = playerController;
         
         // 应用各种永久升级效果
         for (const [id, upgrade] of this._permanentUpgrades.entries()) {
@@ -836,7 +849,7 @@ export class RoguelikeSystem {
                     break;
                     
                 case 'attack':
-                    player.attributes.attack += value;
+                    player.attributes.attackPower += value;
                     break;
                     
                 case 'moveSpeed':
@@ -845,7 +858,7 @@ export class RoguelikeSystem {
                     
                 case 'startingGold':
                     // 设置初始金币
-                    gameState.addGold(value);
+                    GameState.getInstance().addGold(value);
                     break;
                     
                 default:
@@ -885,7 +898,7 @@ export class RoguelikeSystem {
         }
         
         // 通知UI更新
-        eventBus.emit(EventType.PLAYER_EXPERIENCE_CHANGED, {
+        EventBus.getInstance().emit(EventType.PLAYER_EXPERIENCE_CHANGED, {
             experience: this._experience,
             experienceToNextLevel: this._experienceToNextLevel,
             level: this._level
@@ -909,7 +922,7 @@ export class RoguelikeSystem {
         this._upgradePoints++;
         
         // 通知UI更新
-        eventBus.emit(EventType.PLAYER_LEVEL_UP, {
+        EventBus.getInstance().emit(EventType.PLAYER_LEVEL_UP, {
             level: this._level,
             upgradePoints: this._upgradePoints
         });
@@ -918,7 +931,7 @@ export class RoguelikeSystem {
         const upgradeOptions = this._generateUpgradeOptions();
         
         // 显示升级选项UI
-        eventBus.emit(EventType.SHOW_UPGRADE_OPTIONS, upgradeOptions);
+        EventBus.getInstance().emit(EventType.SHOW_UPGRADE_OPTIONS, upgradeOptions);
         
         logger.info(LogCategory.ROGUELIKE, `角色升级: ${this._level}级, 获得1点升级点数`);
     }
@@ -1011,10 +1024,12 @@ export class RoguelikeSystem {
         logger.info(LogCategory.ROGUELIKE, `应用升级选项: ${option.name}`);
         
         // 获取玩家角色
-        const player = gameState.getPlayer();
-        if (!player) {
+        const scene = director.getScene();
+        const playerController = scene.getComponentInChildren(PlayerController);
+        if (!playerController) {
             return;
         }
+        const player = playerController;
         
         // 根据选项类型应用不同的效果
         switch (option.type) {
@@ -1022,7 +1037,7 @@ export class RoguelikeSystem {
                 // 武器升级
                 if (this._equippedWeapon) {
                     this._equippedWeapon.attributes.baseDamage += option.data.damageIncrease;
-                    eventBus.emit(EventType.WEAPON_UPGRADED, this._equippedWeapon);
+                    EventBus.getInstance().emit(EventType.WEAPON_UPGRADED, this._equippedWeapon);
                 }
                 break;
                 
@@ -1032,7 +1047,7 @@ export class RoguelikeSystem {
                 const skill = this._equippedSkills.get(skillId);
                 if (skill && skill.level < skill.maxLevel) {
                     skill.level++;
-                    eventBus.emit(EventType.SKILL_UPGRADED, skill);
+                    EventBus.getInstance().emit(EventType.SKILL_UPGRADED, skill);
                 }
                 break;
                 
@@ -1045,12 +1060,12 @@ export class RoguelikeSystem {
                     player.attributes.maxHealth += value;
                     player.heal(value); // 同时恢复相应的生命值
                 } else if (statName === 'attack') {
-                    player.attributes.attack += value;
+                    player.attributes.attackPower += value;
                 } else if (statName === 'moveSpeed') {
                     player.attributes.moveSpeed += value;
                 }
                 
-                eventBus.emit(EventType.PLAYER_ATTRIBUTE_CHANGED, {
+                EventBus.getInstance().emit(EventType.PLAYER_ATTRIBUTE_CHANGED, {
                     statName,
                     value: player.attributes[statName]
                 });
@@ -1066,7 +1081,7 @@ export class RoguelikeSystem {
         this._upgradePoints--;
         
         // 通知UI更新
-        eventBus.emit(EventType.UPGRADE_POINTS_CHANGED, this._upgradePoints);
+        EventBus.getInstance().emit(EventType.UPGRADE_POINTS_CHANGED, { value: this._upgradePoints });
     }
     
     /**
@@ -1081,7 +1096,7 @@ export class RoguelikeSystem {
         this._soulShards += amount;
         
         // 通知UI更新
-        eventBus.emit(EventType.SOUL_SHARDS_CHANGED, this._soulShards);
+        EventBus.getInstance().emit(EventType.SOUL_SHARDS_CHANGED, { value: this._soulShards });
         
         // 保存永久升级数据
         this._savePermanentUpgradeData();
@@ -1132,7 +1147,7 @@ export class RoguelikeSystem {
         this._savePermanentUpgradeData();
         
         // 通知UI更新
-        eventBus.emit(EventType.PERMANENT_UPGRADE_PURCHASED, {
+        EventBus.getInstance().emit(EventType.PERMANENT_UPGRADE_PURCHASED, {
             upgradeId,
             level: newLevel,
             soulShards: this._soulShards
@@ -1172,7 +1187,9 @@ export class RoguelikeSystem {
         }
         
         // 获取玩家角色
-        const player = gameState.getPlayer();
+        const scene = director.getScene();
+        const playerController = scene.getComponentInChildren(PlayerController);
+        const player = playerController;
         if (!player) {
             return false;
         }
@@ -1190,7 +1207,7 @@ export class RoguelikeSystem {
         // 这里简化处理，实际应该根据武器属性调整玩家属性
         
         // 通知UI更新
-        eventBus.emit(EventType.WEAPON_EQUIPPED, weapon);
+        EventBus.getInstance().emit(EventType.WEAPON_EQUIPPED, weapon);
         
         logger.info(LogCategory.ROGUELIKE, `装备武器: ${weapon.name}`);
         
@@ -1231,21 +1248,21 @@ export class RoguelikeSystem {
         
         // 移除该槽位的现有技能
         for (const [id, equippedSkill] of this._equippedSkills.entries()) {
-            if (equippedSkill.slotIndex === slotIndex) {
+            if ((equippedSkill as any).slotIndex === slotIndex) {
                 this._equippedSkills.delete(id);
                 break;
             }
         }
         
         // 装备新技能
-        skill.slotIndex = slotIndex;
+        const skillWithSlot = { ...skill, slotIndex };
         this._equippedSkills.set(skillId, skill);
         
         // 重置技能冷却
         this._skillCooldowns.delete(skillId);
         
         // 通知UI更新
-        eventBus.emit(EventType.SKILL_EQUIPPED, {
+        EventBus.getInstance().emit(EventType.SKILL_EQUIPPED, {
             skill,
             slotIndex
         });
@@ -1264,7 +1281,7 @@ export class RoguelikeSystem {
             this._unlockedWeapons.add(weaponId);
             
             // 通知UI更新
-            eventBus.emit(EventType.WEAPON_UNLOCKED, this._weaponConfigs.get(weaponId));
+            EventBus.getInstance().emit(EventType.WEAPON_UNLOCKED, this._weaponConfigs.get(weaponId));
             
             logger.info(LogCategory.ROGUELIKE, `解锁武器: ${this._weaponConfigs.get(weaponId).name}`);
         }
@@ -1279,7 +1296,7 @@ export class RoguelikeSystem {
             this._unlockedSkills.add(skillId);
             
             // 通知UI更新
-            eventBus.emit(EventType.SKILL_UNLOCKED, this._skillConfigs.get(skillId));
+            EventBus.getInstance().emit(EventType.SKILL_UNLOCKED, this._skillConfigs.get(skillId));
             
             logger.info(LogCategory.ROGUELIKE, `解锁技能: ${this._skillConfigs.get(skillId).name}`);
         }

@@ -27,6 +27,8 @@ export enum LogCategory {
     AI = 'AI',
     PHYSICS = 'Physics',
     SAVE = 'Save',
+    CHARACTER = 'Character',
+    COMBAT = 'Combat',
 }
 
 /**
@@ -213,7 +215,11 @@ export class Logger {
         
         // 获取当前时间
         const now = new Date();
-        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+        const hours = now.getHours() < 10 ? '0' + now.getHours() : now.getHours().toString();
+        const minutes = now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes().toString();
+        const seconds = now.getSeconds() < 10 ? '0' + now.getSeconds() : now.getSeconds().toString();
+        const milliseconds = now.getMilliseconds() < 100 ? (now.getMilliseconds() < 10 ? '00' + now.getMilliseconds() : '0' + now.getMilliseconds()) : now.getMilliseconds().toString();
+        const timeStr = `${hours}:${minutes}:${seconds}.${milliseconds}`;
         
         // 格式化日志消息
         let logMessage = `[${timeStr}][${levelName}][${category}] ${message}`;

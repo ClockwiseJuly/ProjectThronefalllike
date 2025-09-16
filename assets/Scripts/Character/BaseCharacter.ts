@@ -49,7 +49,9 @@ export enum CharacterFaction {
     /** 中立阵营 */
     NEUTRAL = 'neutral',
     /** 友方阵营 */
-    FRIENDLY = 'friendly'
+    FRIENDLY = 'friendly',
+    /** 塔防阵营 */
+    TOWER = 'tower'
 }
 
 /**
@@ -123,6 +125,8 @@ export class BaseCharacter extends Component {
     protected _canMove: boolean = true;
     /** 是否可以攻击 */
     protected _canAttack: boolean = true;
+    /** 是否自动攻击 */
+    protected _autoAttack: boolean = true;
     /** 是否无敌 */
     protected _isInvincible: boolean = false;
     /** 无敌时间计时器 */
@@ -691,6 +695,29 @@ export class BaseCharacter extends Component {
         });
         
         logger.info(LogCategory.CHARACTER, `角色死亡: ${this.characterName}`);
+    }
+    
+    /**
+     * 设置自动攻击
+     * @param autoAttack 是否自动攻击
+     */
+    public setAutoAttack(autoAttack: boolean): void {
+        this._autoAttack = autoAttack;
+    }
+    
+    /**
+     * 是否自动攻击
+     */
+    public isAutoAttack(): boolean {
+        return this._autoAttack;
+    }
+    
+    /**
+     * 获取角色位置
+     * @returns 角色当前位置
+     */
+    public getPosition(): Vec3 {
+        return this.node.position.clone();
     }
     
     /**
